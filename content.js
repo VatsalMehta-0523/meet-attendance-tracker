@@ -66,8 +66,20 @@
     const baseThreshold = source === "chat" ? 0.7 : 1.0;
     const threshold = baseThreshold * sensitivityMultiplier;
 
-    return { alert: totalScore >= threshold, score: totalScore, labels: matchedLabels };
+    // "qualifies" is a noise floor, not an alert trigger: it decides whether
+    // this single message is even worth feeding into the real-time combined
+    // score below. Whether an alert actually fires is a separate decision
+    // made by recordSignal() against the user's alertThreshold.
+    return { qualifies: totalScore >= threshold, score: totalScore, labels: matchedLabels };
   }
+
+  // A short, whole-message roll-call check-in — "3 present", "present",
+  // "here", "23. Present!" — anchored so it doesn't match "present" inside
+  // an unrelated sentence. Used by the burst detector below: a handful of
+  // these arriving close together is one of the strongest possible signals
+  // that a roll call is actively happening, even if no single message
+  // scores high on its own.
+  const SHORT_PRESENCE_PATTERN = /^[\s"'*]*(?:\d{1,4}|[a-z]{2,20})?[\s:.\-]{0,3}(?:present|here)[\s!.]*$/i;
 
   // ---------------------------------------------------------------------
   // State
@@ -94,6 +106,18 @@
 
     lastAlertTime: 0,
 
+    // Real-time combined score: recent qualifying detections (chat and
+    // captions together) within RAPID_WINDOW_MS of "now", summed. This is
+    // what actually gets compared against alertThreshold — individual
+    // messages no longer fire alerts on their own.
+    recentEvents: [], // { time, score }
+    aggregateScore: 0,
+
+    // Presence-burst detector: counts consecutive short "N present"-style
+    // chat messages as long as no gap between them exceeds RAPID_WINDOW_MS.
+    burstCount: 0,
+    burstLastEventTime: 0,
+
     originalTitle: null,
     titleFlashInterval: null,
     titleFlashStop: null,
@@ -105,11 +129,21 @@
       enabled: true,
       customKeywords: [],
       sensitivity: "normal",
+      alertThreshold: 2.5,
     },
   };
 
   const ALERT_COOLDOWN_MS = 30000;
   const DETECTION_LOG_CAP = 100;
+
+  // How recent evidence has to be to still count toward the combined score,
+  // and the max gap allowed between consecutive presence-burst messages for
+  // them to be considered the same ongoing roll call.
+  const RAPID_WINDOW_MS = 5000;
+  const PRESENCE_BURST_TRIGGER_COUNT = 5;
+  // Comfortably clears the default alertThreshold on its own once the burst
+  // is confirmed, regardless of whatever partial score already accumulated.
+  const PRESENCE_BURST_SCORE_BONUS = 6.0;
 
   // ---------------------------------------------------------------------
   // Settings load + live sync
@@ -117,11 +151,12 @@
 
   function loadSettings(cb) {
     chrome.storage.local.get(
-      { enabled: true, customKeywords: [], sensitivity: "normal" },
+      { enabled: true, customKeywords: [], sensitivity: "normal", alertThreshold: 2.5 },
       (result) => {
         state.settings.enabled = result.enabled;
         state.settings.customKeywords = result.customKeywords;
         state.settings.sensitivity = result.sensitivity;
+        state.settings.alertThreshold = result.alertThreshold;
         if (cb) cb();
       }
     );
@@ -132,6 +167,7 @@
     if (changes.enabled) state.settings.enabled = changes.enabled.newValue;
     if (changes.customKeywords) state.settings.customKeywords = changes.customKeywords.newValue;
     if (changes.sensitivity) state.settings.sensitivity = changes.sensitivity.newValue;
+    if (changes.alertThreshold) state.settings.alertThreshold = changes.alertThreshold.newValue;
   });
 
   // ---------------------------------------------------------------------
@@ -161,6 +197,10 @@
     state.captionNotFoundSince = Date.now();
     state.chatPromptShown = false;
     state.captionPromptShown = false;
+    state.recentEvents = [];
+    state.aggregateScore = 0;
+    state.burstCount = 0;
+    state.burstLastEventTime = 0;
 
     attachChatObserver();
     attachCaptionObserver();
@@ -312,9 +352,40 @@
 
     if (!state.settings.enabled) return;
 
+    // Runs independently of the general keyword floor below — a burst of
+    // short, anchored "N present" check-ins is a strong signal on its own
+    // even when no individual message scores high.
+    checkPresenceBurst(text);
+
     const result = evaluateText(text, "chat", state.settings);
-    if (result.alert) {
-      maybeAlert(text, result.score, "chat", result.labels);
+    if (result.qualifies) {
+      recordSignal(text, result.score, "chat", result.labels);
+    }
+  }
+
+  // Tracks consecutive short roll-call check-ins ("1 present", "here", ...).
+  // As long as each new one arrives within RAPID_WINDOW_MS of the previous
+  // one, the streak keeps extending — so a real burst spread over dozens of
+  // seconds (13 students typing one after another) still counts correctly,
+  // while an unrelated "present" days apart from another doesn't.
+  function checkPresenceBurst(text) {
+    if (!SHORT_PRESENCE_PATTERN.test(text)) return;
+
+    const now = Date.now();
+    if (now - state.burstLastEventTime <= RAPID_WINDOW_MS) {
+      state.burstCount += 1;
+    } else {
+      state.burstCount = 1;
+    }
+    state.burstLastEventTime = now;
+
+    if (state.burstCount === PRESENCE_BURST_TRIGGER_COUNT) {
+      recordSignal(
+        text,
+        PRESENCE_BURST_SCORE_BONUS,
+        "chat",
+        ["presence burst: " + state.burstCount + " consecutive check-ins"]
+      );
     }
   }
 
@@ -382,13 +453,11 @@
   function handleCaptionMutation(container) {
     const currentText = (container.innerText || container.textContent || "").trim();
     if (!currentText) return;
-    console.log("[Meet Attendance Tracker] caption raw text:", JSON.stringify(currentText));
 
     if (currentText.startsWith(state.captionBuffer) || state.captionBuffer === "") {
       state.captionBuffer = currentText;
       resetUtteranceTimer();
     } else {
-      console.log("[Meet Attendance Tracker] caption text did not extend buffer — finalizing early. buffer was:", JSON.stringify(state.captionBuffer));
       finalizeCaptionBuffer();
       state.captionBuffer = currentText;
       resetUtteranceTimer();
@@ -410,15 +479,8 @@
     if (!text || !state.settings.enabled) return;
 
     const result = evaluateText(text, "caption", state.settings);
-    console.log(
-      "[Meet Attendance Tracker] caption finalized:",
-      JSON.stringify(text),
-      "score:", result.score,
-      "alert:", result.alert,
-      "labels:", result.labels
-    );
-    if (result.alert) {
-      maybeAlert(text, result.score, "caption", result.labels);
+    if (result.qualifies) {
+      recordSignal(text, result.score, "caption", result.labels);
     }
   }
 
@@ -501,16 +563,29 @@
   }
 
   // ---------------------------------------------------------------------
-  // Alert manager
+  // Alert manager — combines recent chat + caption evidence into one
+  // real-time score instead of firing on a single isolated keyword hit.
   // ---------------------------------------------------------------------
 
-  function maybeAlert(text, score, source, labels) {
-    const suppressed = Date.now() - state.lastAlertTime < ALERT_COOLDOWN_MS;
-    logDetection(text, score, source, suppressed, labels);
-    if (suppressed) return;
+  function recordSignal(text, score, source, labels) {
+    const now = Date.now();
+    state.recentEvents.push({ time: now, score });
+    state.recentEvents = state.recentEvents.filter((e) => now - e.time <= RAPID_WINDOW_MS);
+    state.aggregateScore = state.recentEvents.reduce((sum, e) => sum + e.score, 0);
 
-    state.lastAlertTime = Date.now();
-    fireAllAlerts(text, score, source);
+    const crossedThreshold = state.aggregateScore >= state.settings.alertThreshold;
+    const cooldownActive = now - state.lastAlertTime < ALERT_COOLDOWN_MS;
+    const suppressed = !crossedThreshold || cooldownActive;
+
+    logDetection(text, score, source, suppressed, labels);
+
+    if (crossedThreshold && !cooldownActive) {
+      const combinedScore = state.aggregateScore;
+      state.lastAlertTime = now;
+      state.recentEvents = [];
+      state.aggregateScore = 0;
+      fireAllAlerts(text, combinedScore, source);
+    }
   }
 
   function logDetection(text, score, source, suppressed, labels) {
@@ -720,6 +795,8 @@
           chat: !!(state.chatContainer && document.contains(state.chatContainer)),
           captions: !!(state.captionContainer && document.contains(state.captionContainer)),
         },
+        aggregateScore: state.aggregateScore,
+        alertThreshold: state.settings.alertThreshold,
       });
       return;
     }

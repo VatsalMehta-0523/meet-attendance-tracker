@@ -25,7 +25,12 @@ const el = {
   testAlertBtn: document.getElementById("testAlertBtn"),
   clearLogBtn: document.getElementById("clearLogBtn"),
   copyDebugBtn: document.getElementById("copyDebugBtn"),
+  openOptionsBtn: document.getElementById("openOptionsBtn"),
 };
+
+el.openOptionsBtn.addEventListener("click", () => {
+  chrome.runtime.openOptionsPage();
+});
 
 let settings = { ...DEFAULTS };
 
