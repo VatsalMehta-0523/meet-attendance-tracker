@@ -1,0 +1,120 @@
+/* Injected into meet.google.com — alert overlay and setup-prompt banners. */
+
+.meet-attendance-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  background: rgba(239, 68, 68, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #ffffff;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  transform: translateY(-100%);
+  transition: transform 300ms ease-out;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  animation: meet-attendance-pulse 1.6s ease-in-out infinite;
+}
+
+.meet-attendance-overlay.meet-attendance-overlay-visible {
+  transform: translateY(0);
+}
+
+.meet-attendance-overlay-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.meet-attendance-overlay-title {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+
+.meet-attendance-overlay-sub {
+  font-weight: 400;
+  font-size: 13px;
+  opacity: 0.92;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meet-attendance-overlay-dismiss {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 150ms ease-out;
+}
+
+.meet-attendance-overlay-dismiss:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+@keyframes meet-attendance-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meet-attendance-overlay {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* Setup prompt banners (chat panel closed / captions disabled) */
+
+.meet-attendance-chat-prompt,
+.meet-attendance-caption-prompt {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(24, 24, 30, 0.95);
+  color: #f0f0f5;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 10px;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.meet-attendance-caption-prompt {
+  bottom: 72px;
+}
+
+.meet-attendance-prompt-dismiss {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f0f0f5;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.meet-attendance-prompt-dismiss:hover {
+  background: rgba(255, 255, 255, 0.18);
+}

@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Meet Attendance Tracker",
+  "version": "1.0.0",
+  "description": "Monitors Google Meet chat and captions for attendance roll calls and fires a loud alert so you never miss one.",
+
+  "permissions": [
+    "notifications",
+    "offscreen",
+    "storage",
+    "activeTab"
+  ],
+
+  "host_permissions": [
+    "https://meet.google.com/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Meet Attendance Tracker",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
