@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Meet Attendance Tracker",
-  "version": "1.0.0",
+  "version": "1.1",
   "description": "Monitors Google Meet chat and captions for attendance roll calls and fires a loud alert so you never miss one.",
 
   "permissions": [
