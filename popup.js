@@ -1,14 +1,12 @@
-// popup.js — reads/writes chrome.storage.local settings and talks to the
-// content script on the active tab for live monitoring status.
-
-const DEFAULTS = {
-  enabled: true,
-  customKeywords: [],
-  sensitivity: "normal",
-  detectionLog: [],
-};
+// popup.js — quick status view: the on/off switch, what's being watched in
+// the current Meet tab, your keywords, and recent detections. Everything else
+// lives on the settings page (options.html). First-time users see a short
+// welcome screen. Keyword helpers come from keywords.js.
 
 const el = {
+  welcomeView: document.getElementById("welcomeView"),
+  mainView: document.getElementById("mainView"),
+  getStartedBtn: document.getElementById("getStartedBtn"),
   masterToggle: document.getElementById("masterToggle"),
   statusDot: document.getElementById("statusDot"),
   statusText: document.getElementById("statusText"),
@@ -16,7 +14,6 @@ const el = {
   chatDetail: document.getElementById("chatDetail"),
   captionDot: document.getElementById("captionDot"),
   captionDetail: document.getElementById("captionDetail"),
-  segmentedPills: Array.from(document.querySelectorAll(".segmented-pill")),
   chipsContainer: document.getElementById("chipsContainer"),
   keywordInput: document.getElementById("keywordInput"),
   addKeywordBtn: document.getElementById("addKeywordBtn"),
@@ -32,95 +29,70 @@ el.openOptionsBtn.addEventListener("click", () => {
   chrome.runtime.openOptionsPage();
 });
 
-let settings = { ...DEFAULTS };
+let enabled = true;
+let keywords = [];
 
 function load() {
-  chrome.storage.local.get(DEFAULTS, (result) => {
-    settings = { ...DEFAULTS, ...result };
+  chrome.storage.local.get({ enabled: true, customKeywords: [], detectionLog: [], onboarded: false }, (result) => {
+    enabled = result.enabled;
+    keywords = result.customKeywords;
+    showView(result.onboarded);
     renderToggle();
-    renderSensitivity();
-    renderChips();
-    renderLog();
+    renderKeywords();
+    renderLog(result.detectionLog);
   });
 }
+
+// --- First-run welcome ---------------------------------------------------
+// A local flag, nothing more: it only decides whether to show the intro.
+// Monitoring works whether or not the user has clicked through it.
+
+function showView(onboarded) {
+  el.welcomeView.hidden = onboarded;
+  el.mainView.hidden = !onboarded;
+}
+
+el.getStartedBtn.addEventListener("click", () => {
+  chrome.storage.local.set({ onboarded: true });
+});
 
 // --- Master toggle ---------------------------------------------------
 
 function renderToggle() {
-  el.masterToggle.setAttribute("aria-checked", String(settings.enabled));
-  el.statusText.textContent = settings.enabled ? "Monitoring active" : "Monitoring paused";
-  el.statusDot.classList.toggle("is-active", settings.enabled);
-  el.statusDot.classList.toggle("is-off", !settings.enabled);
+  el.masterToggle.setAttribute("aria-checked", String(enabled));
+  el.statusText.textContent = enabled ? "Monitoring active" : "Monitoring paused";
+  el.statusDot.classList.toggle("is-active", enabled);
 }
 
 el.masterToggle.addEventListener("click", () => {
-  settings.enabled = !settings.enabled;
-  chrome.storage.local.set({ enabled: settings.enabled });
+  enabled = !enabled;
+  chrome.storage.local.set({ enabled });
   renderToggle();
 });
 
-// --- Sensitivity -------------------------------------------------------
+// --- Keywords -------------------------------------------------------
 
-function renderSensitivity() {
-  for (const pill of el.segmentedPills) {
-    const active = pill.dataset.value === settings.sensitivity;
-    pill.setAttribute("aria-checked", String(active));
-  }
+function saveKeywords(next) {
+  keywords = next;
+  chrome.storage.local.set({ customKeywords: next });
+  renderKeywords();
 }
 
-for (const pill of el.segmentedPills) {
-  pill.addEventListener("click", () => {
-    settings.sensitivity = pill.dataset.value;
-    chrome.storage.local.set({ sensitivity: settings.sensitivity });
-    renderSensitivity();
-  });
+function renderKeywords() {
+  renderKeywordChips(el.chipsContainer, keywords, (kw) => saveKeywords(keywords.filter((k) => k !== kw)));
 }
 
-// --- Keyword chips -------------------------------------------------------
-
-function renderChips() {
-  el.chipsContainer.innerHTML = "";
-  for (const kw of settings.customKeywords) {
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    const label = document.createElement("span");
-    label.textContent = kw;
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "chip-remove";
-    removeBtn.setAttribute("aria-label", "Remove " + kw);
-    removeBtn.textContent = "✕";
-    removeBtn.addEventListener("click", () => removeKeyword(kw));
-    chip.appendChild(label);
-    chip.appendChild(removeBtn);
-    el.chipsContainer.appendChild(chip);
-  }
-}
-
-function addKeyword() {
-  const value = el.keywordInput.value.trim();
-  if (!value) return;
-  if (settings.customKeywords.some((k) => k.toLowerCase() === value.toLowerCase())) {
-    el.keywordInput.value = "";
-    return;
-  }
-  settings.customKeywords = [...settings.customKeywords, value];
-  chrome.storage.local.set({ customKeywords: settings.customKeywords });
+function addFromInput() {
+  const next = addKeywordTo(keywords, el.keywordInput.value);
   el.keywordInput.value = "";
-  renderChips();
+  if (next) saveKeywords(next);
 }
 
-function removeKeyword(kw) {
-  settings.customKeywords = settings.customKeywords.filter((k) => k !== kw);
-  chrome.storage.local.set({ customKeywords: settings.customKeywords });
-  renderChips();
-}
-
-el.addKeywordBtn.addEventListener("click", addKeyword);
+el.addKeywordBtn.addEventListener("click", addFromInput);
 el.keywordInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
-    addKeyword();
+    addFromInput();
   }
 });
 
@@ -130,9 +102,8 @@ function formatTime(ts) {
   return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-function renderLog() {
+function renderLog(entries) {
   el.detectionLog.innerHTML = "";
-  const entries = settings.detectionLog || [];
   el.emptyState.hidden = entries.length > 0;
 
   for (const entry of entries) {
@@ -160,9 +131,7 @@ function renderLog() {
 }
 
 el.clearLogBtn.addEventListener("click", () => {
-  settings.detectionLog = [];
   chrome.storage.local.set({ detectionLog: [] });
-  renderLog();
 });
 
 el.testAlertBtn.addEventListener("click", () => {
@@ -176,9 +145,8 @@ el.testAlertBtn.addEventListener("click", () => {
 });
 
 function flashDebugBtnLabel(text) {
-  const original = "Copy diagnostic info";
   el.copyDebugBtn.textContent = text;
-  setTimeout(() => (el.copyDebugBtn.textContent = original), 2500);
+  setTimeout(() => (el.copyDebugBtn.textContent = "Copy diagnostic info"), 2500);
 }
 
 el.copyDebugBtn.addEventListener("click", () => {
@@ -188,10 +156,9 @@ el.copyDebugBtn.addEventListener("click", () => {
         flashDebugBtnLabel("Not on a Meet call");
         return;
       }
-      const json = JSON.stringify(response, null, 2);
-      navigator.clipboard.writeText(json).then(
-        () => flashDebugBtnLabel("Copied! Paste it to Claude"),
-        () => flashDebugBtnLabel("Copy failed — see console")
+      navigator.clipboard.writeText(JSON.stringify(response, null, 2)).then(
+        () => flashDebugBtnLabel("Copied to clipboard"),
+        () => flashDebugBtnLabel("Couldn't copy")
       );
     });
   });
@@ -223,37 +190,21 @@ function sendMessageWithRetry(tabId, message, callback, attemptsLeft = 5) {
   });
 }
 
+function setCard(dot, detail, dotClass, text) {
+  dot.className = "status-dot " + dotClass;
+  detail.textContent = text;
+}
+
 function renderMonitoringStatus(status) {
   if (!status) {
-    el.chatDot.className = "status-dot";
-    el.chatDetail.textContent = "Not on a Meet call";
-    el.captionDot.className = "status-dot";
-    el.captionDetail.textContent = "Not on a Meet call";
-    return;
-  }
-
-  if (!status.inMeeting) {
-    el.chatDot.className = "status-dot is-off";
-    el.chatDetail.textContent = "Waiting to join";
-    el.captionDot.className = "status-dot is-off";
-    el.captionDetail.textContent = "Waiting to join";
-    return;
-  }
-
-  if (status.monitoring.chat) {
-    el.chatDot.className = "status-dot is-active";
-    el.chatDetail.textContent = "Watching";
+    setCard(el.chatDot, el.chatDetail, "", "Not on a Meet call");
+    setCard(el.captionDot, el.captionDetail, "", "Not on a Meet call");
+  } else if (!status.inMeeting) {
+    setCard(el.chatDot, el.chatDetail, "", "Waiting to join");
+    setCard(el.captionDot, el.captionDetail, "", "Waiting to join");
   } else {
-    el.chatDot.className = "status-dot is-warning";
-    el.chatDetail.textContent = "Open chat panel";
-  }
-
-  if (status.monitoring.captions) {
-    el.captionDot.className = "status-dot is-active";
-    el.captionDetail.textContent = "Watching";
-  } else {
-    el.captionDot.className = "status-dot is-warning";
-    el.captionDetail.textContent = "Enable in Meet";
+    setCard(el.chatDot, el.chatDetail, ...(status.monitoring.chat ? ["is-active", "Watching"] : ["is-warning", "Open the chat panel"]));
+    setCard(el.captionDot, el.captionDetail, ...(status.monitoring.captions ? ["is-active", "Watching"] : ["is-warning", "Press C in Meet"]));
   }
 }
 
@@ -265,21 +216,15 @@ function fetchMonitoringStatus() {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
-  if (changes.detectionLog) {
-    settings.detectionLog = changes.detectionLog.newValue || [];
-    renderLog();
-  }
+  if (changes.onboarded) showView(!!changes.onboarded.newValue);
   if (changes.customKeywords) {
-    settings.customKeywords = changes.customKeywords.newValue || [];
-    renderChips();
+    keywords = changes.customKeywords.newValue || [];
+    renderKeywords();
   }
+  if (changes.detectionLog) renderLog(changes.detectionLog.newValue || []);
   if (changes.enabled) {
-    settings.enabled = changes.enabled.newValue;
+    enabled = changes.enabled.newValue;
     renderToggle();
-  }
-  if (changes.sensitivity) {
-    settings.sensitivity = changes.sensitivity.newValue;
-    renderSensitivity();
   }
 });
 

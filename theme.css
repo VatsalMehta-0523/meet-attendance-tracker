@@ -1,7 +1,7 @@
-/* Shared design tokens for popup.html and options.html — edit here once so
-   both pages stay visually consistent instead of drifting apart. */
-
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+/* Shared design tokens and controls for popup.html and options.html. Edit
+   here once so both pages stay visually consistent. No remote fonts: the
+   stacks fall back to the system UI font, so opening the popup never makes
+   a network request. */
 
 :root {
   --bg-primary: #ffffff;
@@ -58,4 +58,171 @@
   height: 1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
+}
+
+/* Elements styled with display:flex would otherwise ignore `hidden`. */
+[hidden] {
+  display: none !important;
+}
+
+/* Toggle switch */
+
+.toggle {
+  position: relative;
+  width: 48px;
+  height: 26px;
+  border-radius: 13px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: var(--bg-surface-hover);
+  transition: background 200ms ease-out, box-shadow 200ms ease-out;
+  flex-shrink: 0;
+}
+
+.toggle[aria-checked="true"] {
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 200ms ease-out;
+}
+
+.toggle[aria-checked="true"] .toggle-knob {
+  transform: translateX(22px);
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Primary button. Text uses the page background so it stays readable on
+   the lighter dark-mode accent too. */
+
+.primary-btn {
+  width: 100%;
+  height: 40px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent);
+  color: var(--bg-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary-btn:hover {
+  filter: brightness(1.08);
+}
+
+.primary-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Keyword chips + add-keyword row */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chips:empty {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 12px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chip-remove {
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.chip-remove:hover {
+  background: var(--bg-surface);
+  color: var(--danger);
+}
+
+.add-keyword-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px;
+}
+
+.add-keyword-row input {
+  flex: 1;
+  height: 36px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.add-keyword-row input::placeholder {
+  color: var(--text-secondary);
+}
+
+.add-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: var(--bg-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.add-btn:focus-visible,
+.add-keyword-row input:focus-visible,
+.chip-remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle,
+  .toggle-knob {
+    transition: none !important;
+  }
 }

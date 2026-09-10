@@ -7,85 +7,94 @@
 </head>
 <body>
   <div class="popup">
-    <header class="header">
-      <div class="header-top">
-        <div class="header-title">
-          <svg class="bell-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 2C10.9 2 10 2.9 10 4V4.3C7.1 5.1 5 7.8 5 11V16L3.5 17.5C3.2 17.8 3 18.2 3 18.6C3 19.4 3.6 20 4.4 20H19.6C20.4 20 21 19.4 21 18.6C21 18.2 20.8 17.8 20.5 17.5L19 16V11C19 7.8 16.9 5.1 14 4.3V4C14 2.9 13.1 2 12 2Z" fill="currentColor"/>
-            <path d="M9.5 21C9.8 21.9 10.8 22.5 12 22.5C13.2 22.5 14.2 21.9 14.5 21H9.5Z" fill="currentColor"/>
-          </svg>
-          <h1>Attendance Tracker</h1>
-        </div>
-        <button type="button" id="masterToggle" class="toggle" role="switch" aria-checked="true" aria-label="Enable attendance monitoring">
-          <span class="toggle-knob"></span>
-        </button>
-      </div>
-      <p class="header-status">
-        <span id="statusDot" class="status-dot"></span>
-        <span id="statusText">Monitoring active</span>
-      </p>
-    </header>
+    <!-- First-run welcome. "Get started" only saves a local flag. -->
+    <section class="welcome" id="welcomeView" aria-labelledby="welcomeTitle" hidden>
+      <svg class="bell-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 2C10.9 2 10 2.9 10 4V4.3C7.1 5.1 5 7.8 5 11V16L3.5 17.5C3.2 17.8 3 18.2 3 18.6C3 19.4 3.6 20 4.4 20H19.6C20.4 20 21 19.4 21 18.6C21 18.2 20.8 17.8 20.5 17.5L19 16V11C19 7.8 16.9 5.1 14 4.3V4C14 2.9 13.1 2 12 2Z" fill="currentColor"/>
+        <path d="M9.5 21C9.8 21.9 10.8 22.5 12 22.5C13.2 22.5 14.2 21.9 14.5 21H9.5Z" fill="currentColor"/>
+      </svg>
+      <h1 class="welcome-title" id="welcomeTitle">Attendance Tracker</h1>
+      <p class="welcome-copy">Sounds an alarm when your teacher starts taking attendance in a Google Meet class.</p>
+      <ol class="welcome-steps">
+        <li>Join your Meet call</li>
+        <li>Open the chat panel</li>
+        <li>Turn on captions (press C)</li>
+      </ol>
+      <button type="button" id="getStartedBtn" class="primary-btn">Get started</button>
+      <p class="welcome-note">Everything runs on your computer. Nothing gets sent anywhere.</p>
+    </section>
 
-    <section class="section" aria-label="Monitoring status">
-      <div class="status-cards">
-        <div class="status-card" id="chatCard">
+    <div class="main-view" id="mainView" hidden>
+      <header class="header">
+        <div class="header-top">
+          <div class="header-title">
+            <svg class="bell-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 2C10.9 2 10 2.9 10 4V4.3C7.1 5.1 5 7.8 5 11V16L3.5 17.5C3.2 17.8 3 18.2 3 18.6C3 19.4 3.6 20 4.4 20H19.6C20.4 20 21 19.4 21 18.6C21 18.2 20.8 17.8 20.5 17.5L19 16V11C19 7.8 16.9 5.1 14 4.3V4C14 2.9 13.1 2 12 2Z" fill="currentColor"/>
+              <path d="M9.5 21C9.8 21.9 10.8 22.5 12 22.5C13.2 22.5 14.2 21.9 14.5 21H9.5Z" fill="currentColor"/>
+            </svg>
+            <h1>Attendance Tracker</h1>
+          </div>
+          <button type="button" id="masterToggle" class="toggle" role="switch" aria-checked="true" aria-label="Enable attendance monitoring">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+        <p class="header-status">
+          <span id="statusDot" class="status-dot"></span>
+          <span id="statusText">Monitoring active</span>
+        </p>
+      </header>
+
+      <section class="status-cards" aria-label="What's being watched">
+        <div class="status-card">
           <div class="status-card-top">
             <span class="status-dot" id="chatDot"></span>
             <span class="status-card-label">Chat</span>
           </div>
           <span class="status-card-detail" id="chatDetail">Checking…</span>
         </div>
-        <div class="status-card" id="captionCard">
+        <div class="status-card">
           <div class="status-card-top">
             <span class="status-dot" id="captionDot"></span>
             <span class="status-card-label">Captions</span>
           </div>
           <span class="status-card-detail" id="captionDetail">Checking…</span>
         </div>
-      </div>
-      <button type="button" id="copyDebugBtn" class="link-btn debug-link">Copy diagnostic info</button>
-    </section>
+      </section>
 
-    <section class="section" aria-label="Sensitivity">
-      <h2 class="section-title">Sensitivity</h2>
-      <div class="segmented" role="radiogroup" aria-label="Detection sensitivity">
-        <button type="button" class="segmented-pill" data-value="low" role="radio" aria-checked="false">Low</button>
-        <button type="button" class="segmented-pill" data-value="normal" role="radio" aria-checked="true">Normal</button>
-        <button type="button" class="segmented-pill" data-value="high" role="radio" aria-checked="false">High</button>
-      </div>
-    </section>
+      <section class="section" aria-labelledby="keywordsTitle">
+        <h2 class="section-title" id="keywordsTitle">Your keywords</h2>
+        <p class="section-description">Add your name, your roll number or a phrase your teacher always uses. An exact match counts as a strong signal.</p>
+        <div class="chips" id="chipsContainer"></div>
+        <div class="add-keyword-row">
+          <label for="keywordInput" class="visually-hidden">Add a keyword</label>
+          <input type="text" id="keywordInput" placeholder="Add your name or roll number" maxlength="40" />
+          <button type="button" id="addKeywordBtn" class="add-btn" aria-label="Add keyword">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </section>
 
-    <section class="section" aria-label="Custom keywords">
-      <h2 class="section-title">My Keywords</h2>
-      <div class="chips" id="chipsContainer"></div>
-      <div class="add-keyword-row">
-        <label for="keywordInput" class="visually-hidden">Add name or roll number</label>
-        <input type="text" id="keywordInput" placeholder="Add name or roll number…" maxlength="40" />
-        <button type="button" id="addKeywordBtn" class="add-btn" aria-label="Add keyword">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
-          </svg>
-        </button>
-      </div>
-    </section>
-
-    <section class="section" aria-label="Detection log">
-      <div class="section-title-row">
-        <h2 class="section-title">Detection Log</h2>
-        <div class="section-actions">
-          <button type="button" id="testAlertBtn" class="link-btn">Test alert</button>
+      <section class="section" aria-labelledby="logTitle">
+        <div class="section-title-row">
+          <h2 class="section-title" id="logTitle">Recent detections</h2>
           <button type="button" id="clearLogBtn" class="link-btn">Clear</button>
         </div>
-      </div>
-      <ul class="detection-log" id="detectionLog"></ul>
-      <p class="empty-state" id="emptyState" hidden>No detections yet — you're all clear!</p>
-    </section>
+        <ul class="detection-log" id="detectionLog"></ul>
+        <p class="empty-state" id="emptyState" hidden>Nothing detected yet.</p>
+      </section>
 
-    <footer class="footer">
-      <button type="button" id="openOptionsBtn" class="footer-link">More settings →</button>
-    </footer>
+      <button type="button" id="testAlertBtn" class="primary-btn">Test alert</button>
+
+      <footer class="footer">
+        <button type="button" id="copyDebugBtn" class="link-btn muted">Copy diagnostic info</button>
+        <button type="button" id="openOptionsBtn" class="link-btn">Settings</button>
+      </footer>
+    </div>
   </div>
 
+  <script src="keywords.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
