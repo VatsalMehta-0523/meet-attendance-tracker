@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<!-- Dev-only check for content.js detection (not shipped in the extension).
+     Builds a fake Meet call, loads the real content.js against it, and prints
+     PASS/FAIL for each case. Open it in Chrome and wait about 15 seconds. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Running…</title>
+</head>
+<body>
+  <button aria-label="Leave call">Leave call</button>
+  <div>
+    <div id="chat" aria-live="polite" style="width: 300px; min-height: 40px">
+      <div>roll number please</div>
+    </div>
+    <textarea aria-label="Send a message"></textarea>
+  </div>
+  <div id="captions" role="region" aria-label="Captions"></div>
+  <pre id="out">Running… (about 15 seconds)</pre>
+
+  <script>
+    // Minimal chrome.* stub: just enough for content.js to run and log.
+    // Banner and title flash are off so alerts don't cover the results.
+    const store = { alertBanner: false, alertTitleFlash: false };
+    const storageListeners = [];
+    window.chrome = {
+      storage: {
+        local: {
+          get(defaults, cb) {
+            const result = { ...defaults };
+            for (const k in store) if (k in result) result[k] = store[k];
+            if (cb) cb(result);
+            return Promise.resolve(result);
+          },
+          set(obj) {
+            const changes = {};
+            for (const k in obj) {
+              changes[k] = { newValue: obj[k] };
+              store[k] = obj[k];
+            }
+            storageListeners.forEach((l) => l(changes, "local"));
+            return Promise.resolve();
+          },
+        },
+        onChanged: { addListener: (l) => storageListeners.push(l) },
+      },
+      runtime: { sendMessage() {}, onMessage: { addListener() {} } },
+    };
+  </script>
+  <script src="../content.js"></script>
+  <script>
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const entries = (source) => (store.detectionLog || []).filter((e) => e.source === source);
+    const results = [];
+    const check = (name, ok) => results.push((ok ? "PASS  " : "FAIL  ") + name);
+
+    function sendChat(text) {
+      const msg = document.createElement("div");
+      msg.textContent = text;
+      chat.appendChild(msg);
+    }
+
+    // content.js scores an utterance after 2s without changes. 3.2s keeps the
+    // order right even when Chrome rounds timers to whole seconds (background tab).
+    async function showCaption(text, waitMs = 3200) {
+      captions.textContent = text;
+      await sleep(waitMs);
+    }
+
+    (async () => {
+      await sleep(100);
+      check("chat already on screen when the tracker attaches is not scored", entries("chat").length === 0);
+
+      sendChat("roll number please");
+      await sleep(50);
+      check("new chat message is scored", entries("chat").length === 1);
+
+      sendChat("roll number please");
+      await sleep(50);
+      check("same text sent again is scored again", entries("chat").length === 2);
+
+      const wrapper = document.createElement("div");
+      chat.appendChild(wrapper);
+      const inner = document.createElement("div");
+      inner.textContent = "please mark your attendance";
+      wrapper.appendChild(inner);
+      await sleep(50);
+      check("message and its wrapper added together are scored once", entries("chat").length === 3);
+
+      for (let i = 0; i < 5; i++) sendChat("present");
+      await sleep(50);
+      check(
+        "five identical \"present\" replies trigger the burst detector",
+        entries("chat").some((e) => e.labels.some((l) => l.startsWith("presence burst")))
+      );
+
+      await showCaption("please mark your");
+      check("caption without a keyword is not scored", entries("caption").length === 0);
+
+      await showCaption("please mark your attendance");
+      check("phrase finished after a pause is scored", entries("caption").length === 1);
+
+      await showCaption("please mark your attendance okay");
+      check("caption text still on screen is not scored twice", entries("caption").length === 1);
+
+      await showCaption("", 50);
+      await showCaption("mark your attendance");
+      check("same phrase said again later is scored again", entries("caption").length === 2);
+
+      const passed = results.every((r) => r.startsWith("PASS"));
+      out.textContent = results.join("\n") + "\n\n" + (passed ? "ALL PASSED" : "SOME CHECKS FAILED");
+      document.title = passed ? "PASS" : "FAIL";
+    })();
+  </script>
+</body>
+</html>

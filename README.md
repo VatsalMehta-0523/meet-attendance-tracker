@@ -145,6 +145,13 @@ each individual message scored.
   don't alert again until the quiet time you picked in Settings runs out
   (30 seconds by default), so one roll call doesn't set off four alarms. The
   combined score also resets after firing.
+- **Repeats count**: every new chat message is scored, even when it has the
+  same text as an earlier one, so five students typing "present" is five
+  check-ins. Messages already on screen when the tracker attaches (say,
+  after you reopen the chat panel) are skipped. For captions, only speech
+  that's new since the last check is scored, so lines Meet keeps on screen
+  aren't counted twice. Run `tools/detection-check.html` (see below) after
+  changing any of this.
 - **Resilient selectors**: Google Meet's class names are obfuscated and
   change often, so the DOM lookup cascades through `aria-label` → ARIA
   `role` → structural fallbacks, and re-attaches automatically if you open
@@ -173,6 +180,14 @@ tools\.venv\Scripts\python tools\generate_alarm.py
 ```
 
 (On macOS/Linux, replace `tools\.venv\Scripts\` with `tools/.venv/bin/`.)
+
+## Automated detection check (dev-only)
+
+`tools/detection-check.html` loads the real `content.js` into a fake Meet
+call and checks that chat messages and captions are each counted once,
+including repeats. Drag the file into a Chrome tab and wait about 15
+seconds: the tab title turns to PASS or FAIL, and every case is listed on
+the page. It isn't part of the Web Store zip.
 
 ## Manual verification checklist
 

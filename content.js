@@ -38,12 +38,26 @@
     return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
-  function evaluateText(text, source, settings) {
+  // True if `pattern` matches in `text` with the match ending after
+  // `fromIndex`. Captions use this to score only what's new since the last
+  // check, while still catching a phrase that straddles the cut
+  // ("roll" | " number").
+  function matchesAfter(pattern, text, fromIndex) {
+    if (fromIndex === 0) return pattern.test(text);
+    const re = new RegExp(pattern.source, pattern.flags.replace("g", "") + "g");
+    for (let m; (m = re.exec(text)); ) {
+      if (m.index + m[0].length > fromIndex) return true;
+      if (!m[0].length) re.lastIndex++;
+    }
+    return false;
+  }
+
+  function evaluateText(text, source, settings, fromIndex = 0) {
     let totalScore = 0;
     const matchedLabels = [];
 
     for (const rule of KEYWORD_RULES) {
-      if (rule.pattern.test(text)) {
+      if (matchesAfter(rule.pattern, text, fromIndex)) {
         totalScore += rule.score;
         matchedLabels.push(rule.label);
       }
@@ -53,7 +67,7 @@
       if (!kw) continue;
       const escaped = escapeRegExp(kw);
       try {
-        if (new RegExp("\\b" + escaped + "\\b", "i").test(text)) {
+        if (matchesAfter(new RegExp("\\b" + escaped + "\\b", "i"), text, fromIndex)) {
           totalScore += 1.0;
           matchedLabels.push("custom: " + kw);
         }
@@ -93,13 +107,14 @@
     chatContainer: null,
     chatObserver: null,
     bodyObserver: null,
-    processedMessages: new Set(),
+    seenChatNodes: new WeakSet(),
     chatNotFoundSince: null,
     chatPromptShown: false,
 
     captionContainer: null,
     captionObserver: null,
-    captionBuffer: "",
+    captionBuffer: "", // caption text of the utterance in progress
+    captionScored: "", // caption text as of the last scoring pass
     utteranceTimer: null,
     captionNotFoundSince: null,
     captionPromptShown: false,
@@ -191,7 +206,7 @@
 
   function onMeetingJoined() {
     state.inMeeting = true;
-    state.processedMessages.clear();
+    state.seenChatNodes = new WeakSet();
     state.chatNotFoundSince = Date.now();
     state.captionNotFoundSince = Date.now();
     state.chatPromptShown = false;
@@ -315,17 +330,25 @@
     state.chatPromptShown = false;
     removePrompt("chat");
 
-    // Scan messages already present when the extension attaches mid-meeting.
-    for (const node of container.children) {
-      processChatNode(node);
+    // Messages already on screen when we attach (extension reloaded mid-call,
+    // chat panel reopened) are old: mark them seen instead of scoring them
+    // all at once, which could fire an alert for a roll call that's over.
+    for (const node of container.querySelectorAll("*")) {
+      state.seenChatNodes.add(node);
     }
 
     state.chatObserver = new MutationObserver((mutations) => {
+      const added = [];
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            processChatNode(node);
-          }
+          if (node.nodeType === Node.ELEMENT_NODE) added.push(node);
+        }
+      }
+      // A message and the wrapper it sits in can land in the same batch;
+      // score only the outer one so the text isn't counted twice.
+      for (const node of added) {
+        if (!added.some((other) => other !== node && other.contains(node))) {
+          processChatNode(node);
         }
       }
     });
@@ -333,21 +356,14 @@
     return true;
   }
 
-  function hashMessage(str) {
-    let hash = 5381;
-    for (let i = 0; i < str.length; i++) {
-      hash = ((hash << 5) + hash) + str.charCodeAt(i);
-    }
-    return hash >>> 0;
-  }
-
   function processChatNode(node) {
+    // Dedupe by element, not by text: two students typing "present", or a
+    // teacher repeating "roll number", are separate messages and each counts.
+    if (state.seenChatNodes.has(node)) return;
+    state.seenChatNodes.add(node);
+
     const text = (node.innerText || node.textContent || "").trim();
     if (!text) return;
-
-    const hash = hashMessage(text);
-    if (state.processedMessages.has(hash)) return;
-    state.processedMessages.add(hash);
 
     if (!state.settings.enabled) return;
 
@@ -441,6 +457,7 @@
     state.captionPromptShown = false;
     removePrompt("caption");
     state.captionBuffer = "";
+    state.captionScored = "";
 
     state.captionObserver = new MutationObserver(() => {
       handleCaptionMutation(container);
@@ -451,16 +468,19 @@
 
   function handleCaptionMutation(container) {
     const currentText = (container.innerText || container.textContent || "").trim();
-    if (!currentText) return;
-
-    if (currentText.startsWith(state.captionBuffer) || state.captionBuffer === "") {
-      state.captionBuffer = currentText;
-      resetUtteranceTimer();
-    } else {
+    if (!currentText) {
+      // Captions cleared: what was on screen is gone, so whatever shows up
+      // next is new speech, even if it repeats the last line word for word.
       finalizeCaptionBuffer();
-      state.captionBuffer = currentText;
-      resetUtteranceTimer();
+      state.captionScored = "";
+      return;
     }
+
+    if (state.captionBuffer && !currentText.startsWith(state.captionBuffer)) {
+      finalizeCaptionBuffer();
+    }
+    state.captionBuffer = currentText;
+    resetUtteranceTimer();
   }
 
   function resetUtteranceTimer() {
@@ -475,11 +495,18 @@
       clearTimeout(state.utteranceTimer);
       state.utteranceTimer = null;
     }
-    if (!text || !state.settings.enabled) return;
+    if (!text) return;
 
-    const result = evaluateText(text, "caption", state.settings);
+    // Meet keeps recent lines on screen, so the text usually still starts
+    // with what was scored last time. Only matches reaching past that point
+    // count; otherwise every pause would score the same words again.
+    const from = text.startsWith(state.captionScored) ? state.captionScored.length : 0;
+    state.captionScored = text;
+    if (!state.settings.enabled) return;
+
+    const result = evaluateText(text, "caption", state.settings, from);
     if (result.qualifies) {
-      recordSignal(text, result.score, "caption", result.labels);
+      recordSignal(text.slice(from).trim() || text, result.score, "caption", result.labels);
     }
   }
 
