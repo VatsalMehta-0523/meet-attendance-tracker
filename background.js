@@ -5,6 +5,9 @@
 const OFFSCREEN_PATH = "offscreen.html";
 const NORMAL_ICONS = { 16: "icons/icon16.png", 48: "icons/icon48.png", 128: "icons/icon128.png" };
 const ALERT_ICONS = { 16: "icons/icon-alert16.png", 48: "icons/icon-alert48.png", 128: "icons/icon-alert128.png" };
+// Same keys and defaults as DEFAULTS in options.js.
+// customAlarm is the uploaded tone as a data URL ("" = use alarm.wav).
+const ALERT_DEFAULTS = { alertSound: true, alertNotification: true, alarmVolume: 1, customAlarm: "" };
 let iconResetTimeout = null;
 
 async function hasOffscreenDocument() {
@@ -36,10 +39,10 @@ async function ensureOffscreenDocument() {
   }
 }
 
-async function playAlarm() {
+async function playAlarm(volume, src) {
   try {
     await ensureOffscreenDocument();
-    chrome.runtime.sendMessage({ type: "PLAY_ALARM" });
+    chrome.runtime.sendMessage({ type: "PLAY_ALARM", volume, src });
   } catch (e) {
     console.error("Meet Attendance Tracker: failed to play alarm", e);
   }
@@ -65,20 +68,24 @@ function showAlertIcon() {
   }, 30000);
 }
 
+// Real alerts and test alerts both respect the user's alert settings, so
+// "Test alert" shows exactly what a real roll call would do.
+async function fireAlert(text, source) {
+  const s = await chrome.storage.local.get(ALERT_DEFAULTS);
+  if (s.alertNotification) notify(text, source);
+  if (s.alertSound) playAlarm(s.alarmVolume, s.customAlarm);
+  showAlertIcon();
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "ALERT") {
-    notify(message.text, message.source);
-    playAlarm();
-    showAlertIcon();
+    fireAlert(message.text, message.source);
     return;
   }
 
   if (message.type === "TEST_ALERT") {
-    notify("Test alert", "test");
-    playAlarm();
-    showAlertIcon();
+    fireAlert("Test alert", "test");
     sendResponse({ ok: true });
-    return;
   }
 });
 

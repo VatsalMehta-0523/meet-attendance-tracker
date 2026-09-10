@@ -32,9 +32,11 @@ it to actually run the extension.
    until you remove it or click the card's "Off" toggle.
 6. Click the puzzle-piece icon in Chrome's toolbar → click the pin next to
    "Meet Attendance Tracker" so its bell icon stays visible in the toolbar.
-7. Click that bell icon to open the popup, then click **Test alert**. You
-   should immediately hear the alarm and see a Windows notification — this
-   confirms the extension is working *before* you even join a Meet call.
+7. Click that bell icon to open the popup. The first time, you'll see a
+   short welcome screen with the setup steps; click **Get started**. Then
+   click **Test alert**. You should immediately hear the alarm and see a
+   desktop notification, which confirms the extension works *before* you
+   even join a Meet call.
 8. Join any `meet.google.com` call. Open the popup again — the **Chat** and
    **Captions** status cards should switch to "Watching" (green dot) once
    you open the chat panel / turn on captions (press `c` in Meet).
@@ -53,12 +55,16 @@ content.js          Primary brain: DOM monitoring, keyword scoring, real-time
 background.js       Service worker: desktop notifications + offscreen audio
 offscreen.html/js    Hidden document that plays alarm.wav (service workers
                      can't use the Audio API directly)
-popup.html/css/js    Extension popup UI (toggle, sensitivity, keywords, log)
-options.html/css/js  Full settings page (opens in its own tab) — alert
-                     threshold slider, suggested keywords, alarm sound
-                     placeholder. Reads/writes the same storage as the popup.
-theme.css            Design tokens (colors, fonts) shared by popup and
-                     options so the two pages can't visually drift apart
+popup.html/css/js    Extension popup: first-run welcome screen, on/off
+                     switch, chat/captions status, recent detections, test
+                     alert
+options.html/css/js  Settings page (opens in its own tab): sensitivity,
+                     keywords, which alerts fire, alarm volume, quiet time,
+                     alert threshold. Same storage as the popup.
+theme.css            Colors, switch, button and keyword chip styles shared
+                     by the popup and settings page. No remote fonts.
+keywords.js          Keyword add/dedupe/chip helpers shared by the popup
+                     and settings page
 styles.css           Styles injected into meet.google.com (alert overlay,
                      "enable captions/chat" prompts)
 alarm.wav            Synthesized alarm tone
@@ -71,26 +77,36 @@ tools/               Python scripts that generated icons/ and alarm.wav
 
 Click the extension icon to open the popup:
 
-- **Master toggle** — pause/resume monitoring entirely
-- **Chat / Captions status cards** — show whether each source is currently
-  being watched in the active Meet tab (captions require you to press `c`
-  in Meet to turn them on)
-- **Sensitivity** — Low / Normal / High. Low = fewer false alarms, needs a
-  stronger match. High = catches weaker signals, more prone to false
-  positives.
-- **My Keywords** — add your name / roll number; any exact word-boundary
-  match scores as a strong signal
-- **Detection Log** — last 100 detections (chat or voice), newest first.
-  Greyed-out entries didn't (yet) trigger an alert — either the 30-second
-  cooldown was active, or the combined score hadn't crossed your alert
-  threshold yet. Still logged so you can see what the extension noticed.
-- **Test alert** — fires the full alert chain (sound, notification, overlay,
-  title flash) on demand, without needing a real roll-call, so you can
-  confirm your speakers/notification settings work before you actually need
-  it.
-- **More settings →** — opens [options.html](options.html) in a full tab:
-  alert threshold slider, one-click suggested keywords, and a placeholder
-  for custom alarm sounds (not implemented yet — clicking it explains that).
+- **On/off switch** pauses or resumes monitoring.
+- **Chat / Captions cards** show whether each one is being watched in the
+  current Meet tab. Captions only work after you press `c` in Meet.
+- **Your keywords** lets you add or remove your name, roll number or a
+  phrase your teacher always uses, right from the popup.
+- **Recent detections** lists the last 100 things the tracker noticed,
+  newest first. Greyed-out entries didn't set off an alert, either because
+  the quiet time after an earlier alert was still running or because the
+  combined score hadn't reached your alert threshold.
+- **Test alert** runs every alert you have turned on, so you can check your
+  speakers and notifications before class.
+- **Settings** opens [options.html](options.html) in its own tab.
+
+The settings page has:
+
+- **Sensitivity** (Low / Normal / High). Low means fewer false alarms, High
+  catches weaker signals.
+- **Your keywords**, like your name or roll number. An exact word match
+  counts as a strong signal. There are one-click suggestions too.
+- **Alerts**: turn the alarm sound, desktop notification, Meet banner and
+  flashing tab title on or off separately, upload your own alarm tone (any
+  audio clip up to 30 seconds and 3 MB, kept in local storage), set the
+  alarm volume, and pick
+  how long the tracker stays quiet after an alert (15 seconds to 2 minutes,
+  30 seconds by default).
+- **Alert threshold**: how high the combined score has to get before an
+  alert goes off (2.5 by default).
+
+Everything is stored locally in `chrome.storage.local`. Nothing leaves your
+computer.
 
 ## How detection works
 
@@ -125,8 +141,9 @@ catch that). Five in a row is treated as very strong evidence on its own and
 injects a large score bump into the combined total above, regardless of what
 each individual message scored.
 
-- **Cooldown**: once an alert fires, further detections are logged but
-  suppressed for 30 seconds, so one roll-call doesn't spam four alerts. The
+- **Quiet time**: once an alert fires, further detections are logged but
+  don't alert again until the quiet time you picked in Settings runs out
+  (30 seconds by default), so one roll call doesn't set off four alarms. The
   combined score also resets after firing.
 - **Resilient selectors**: Google Meet's class names are obfuscated and
   change often, so the DOM lookup cascades through `aria-label` → ARIA
@@ -167,7 +184,7 @@ tools\.venv\Scripts\python tools\generate_alarm.py
 3. Immediately send a second related message (e.g. "roll number please") →
    combined score should now cross 2.5 and the full alert chain (sound,
    notification, red banner, flashing tab title) should fire within ~1s
-4. Open the popup → **More settings** → drag the alert threshold slider
+4. Open the popup → **Settings** → drag the alert threshold slider
    down to ~1.5 → a single "mark your attendance" message should now alert
    on its own
 5. Test the burst detector: send "1 present", "2 present", "3 present",
@@ -182,9 +199,15 @@ tools\.venv\Scripts\python tools\generate_alarm.py
    confirm the notification still reaches you
 9. Switch your OS theme light/dark → popup and options page should both
    re-theme automatically
-10. On the options page, click a suggested keyword chip → it should appear
-    in "My Keywords" and grey itself out; click "Upload custom sound" →
-    should show the "Coming soon" modal, not attempt an upload
+10. On the settings page, click a suggested keyword → it should appear
+    under "Your keywords" and grey itself out
+11. In Settings, turn off **Banner in Meet**, then click **Test alert** in
+    the popup while on the Meet tab → sound and notification fire, no red
+    banner. Set **Alarm volume** to 20% and test again → noticeably quieter
+12. In Settings, click **Upload sound** and pick a short MP3 → its file name
+    shows under "Alarm tone" and **Test sound and notification** plays it.
+    Try a PDF or a clip over 30 seconds → you get an error and nothing is
+    saved. **Use built-in** switches back to the default alarm
 
 ## Troubleshooting: no alerts firing
 
@@ -205,22 +228,23 @@ Work through these in order — each rules out one layer.
      Windows Focus Assist / notification settings blocking Chrome, system
      volume muted, or (very old Chrome versions) a missing `offscreen` API —
      update Chrome if so.
-   - Notification fires but no sound? Check your system volume and that no
-     other app has exclusive audio control.
+   - Notification fires but no sound? In Settings, check that **Alarm
+     sound** is on and **Alarm volume** isn't at 0%. Then check your system
+     volume and that no other app has exclusive audio control.
+   - No notification? Check that **Desktop notification** is on in Settings.
 3. **Test alert works, but real detection doesn't fire in a Meet call?**
    Open the popup while in the call and check the **Chat**/**Captions**
    status cards:
-   - "Open chat panel" / "Enable in Meet" → the extension can't find that
-     panel yet. Open the chat sidebar, or press `c` to enable captions.
-     After ~30s of not finding it, an in-meeting banner also prompts for
-     this automatically.
-   - Both say "Watching" but a real roll-call still doesn't alert → check
-     the **Detection Log** in the popup. If your message *is* logged but
-     greyed out, either the 30-second cooldown was active (a previous alert
-     already fired recently), or the combined score hasn't crossed your
-     **alert threshold** yet (options page slider) — both are working as
-     intended, not a bug; a second corroborating message usually pushes it
-     over. If it's not logged at all, the phrase scored below the
+   - "Open the chat panel" / "Press C in Meet" → the extension can't find
+     that panel yet. Open the chat sidebar, or press `c` to turn on
+     captions. After ~30s of not finding it, an in-meeting banner also
+     prompts for this automatically.
+   - Both say "Watching" but a real roll call still doesn't alert → check
+     **Recent detections** in the popup. If your message *is* logged but
+     greyed out, either the quiet time after an earlier alert was still
+     running, or the combined score hasn't reached your **alert threshold**
+     yet (in Settings). Both are working as intended, and a second related
+     message usually pushes it over. If it's not logged at all, the phrase scored below the
      per-message floor; lower sensitivity to **High** or add the exact
      phrase your class uses as a custom keyword.
 4. **Nothing above explains it** — Google Meet changes its DOM often enough

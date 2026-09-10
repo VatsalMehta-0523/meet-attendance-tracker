@@ -2,40 +2,45 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Meet Attendance Tracker — Settings</title>
+  <title>Meet Attendance Tracker settings</title>
   <link rel="stylesheet" href="options.css" />
 </head>
 <body>
   <div class="page">
     <header class="page-header">
-      <div class="page-header-title">
-        <svg class="bell-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 2C10.9 2 10 2.9 10 4V4.3C7.1 5.1 5 7.8 5 11V16L3.5 17.5C3.2 17.8 3 18.2 3 18.6C3 19.4 3.6 20 4.4 20H19.6C20.4 20 21 19.4 21 18.6C21 18.2 20.8 17.8 20.5 17.5L19 16V11C19 7.8 16.9 5.1 14 4.3V4C14 2.9 13.1 2 12 2Z" fill="currentColor"/>
-          <path d="M9.5 21C9.8 21.9 10.8 22.5 12 22.5C13.2 22.5 14.2 21.9 14.5 21H9.5Z" fill="currentColor"/>
-        </svg>
-        <div>
-          <h1>Attendance Tracker Settings</h1>
-          <p class="page-subtitle">Full configuration — changes save automatically and sync to the popup instantly.</p>
-        </div>
+      <svg class="bell-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 2C10.9 2 10 2.9 10 4V4.3C7.1 5.1 5 7.8 5 11V16L3.5 17.5C3.2 17.8 3 18.2 3 18.6C3 19.4 3.6 20 4.4 20H19.6C20.4 20 21 19.4 21 18.6C21 18.2 20.8 17.8 20.5 17.5L19 16V11C19 7.8 16.9 5.1 14 4.3V4C14 2.9 13.1 2 12 2Z" fill="currentColor"/>
+        <path d="M9.5 21C9.8 21.9 10.8 22.5 12 22.5C13.2 22.5 14.2 21.9 14.5 21H9.5Z" fill="currentColor"/>
+      </svg>
+      <div class="page-header-text">
+        <h1>Attendance Tracker settings</h1>
+        <p class="page-subtitle">Changes save as soon as you make them.</p>
       </div>
+      <!-- To show this link, paste your support page URL into href and delete `hidden`. -->
+      <a class="support-link" href="" target="_blank" rel="noopener noreferrer" hidden>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 21s-6.7-4.35-9.3-8.1C1.02 10.6 1.5 7.4 4.1 5.9 6.2 4.7 8.7 5.3 10 7c.5.65 1 1.5 2 1.5s1.5-.85 2-1.5c1.3-1.7 3.8-2.3 5.9-1.1 2.6 1.5 3.08 4.7 1.4 7-2.6 3.75-9.3 8.1-9.3 8.1z"/>
+        </svg>
+        <span>Support the dev</span>
+      </a>
     </header>
 
-    <section class="card" aria-label="Monitoring">
-      <h2 class="card-title">Monitoring</h2>
+    <section class="card" aria-labelledby="monitoringTitle">
+      <h2 class="card-title" id="monitoringTitle">Monitoring</h2>
       <div class="row-between">
         <div>
-          <p class="row-label">Enable monitoring</p>
-          <p class="row-detail">Pause this to stop watching chat and captions entirely.</p>
+          <p class="row-label" id="enabledLabel">Watch Meet calls</p>
+          <p class="row-detail">When this is off, the tracker ignores chat and captions completely.</p>
         </div>
-        <button type="button" id="masterToggle" class="toggle" role="switch" aria-checked="true" aria-label="Enable attendance monitoring">
+        <button type="button" class="toggle" role="switch" data-setting="enabled" aria-checked="true" aria-labelledby="enabledLabel">
           <span class="toggle-knob"></span>
         </button>
       </div>
 
       <div class="field">
-        <p class="row-label">Sensitivity</p>
-        <p class="row-detail">How strong a single message's wording needs to be before it's even considered evidence.</p>
-        <div class="segmented" role="radiogroup" aria-label="Detection sensitivity">
+        <p class="row-label" id="sensitivityLabel">Sensitivity</p>
+        <p class="row-detail">How clearly one message has to mention attendance before it counts. Low gives fewer false alarms, High catches more.</p>
+        <div class="segmented" role="radiogroup" aria-labelledby="sensitivityLabel">
           <button type="button" class="segmented-pill" data-value="low" role="radio" aria-checked="false">Low</button>
           <button type="button" class="segmented-pill" data-value="normal" role="radio" aria-checked="true">Normal</button>
           <button type="button" class="segmented-pill" data-value="high" role="radio" aria-checked="false">High</button>
@@ -43,31 +48,13 @@
       </div>
     </section>
 
-    <section class="card" aria-label="Alert threshold">
-      <h2 class="card-title">Alert Threshold</h2>
-      <p class="card-description">
-        Individual messages no longer trigger an alert by themselves. Instead, evidence from
-        recent chat messages and captions (last few seconds) is combined into one live score —
-        the alarm fires only once that combined score crosses this line. Lower = more sensitive,
-        more prone to false alarms. Higher = needs stronger or repeated evidence.
-      </p>
-      <div class="slider-row">
-        <input type="range" id="thresholdSlider" min="1" max="6" step="0.1" value="2.5" aria-label="Alert threshold" />
-        <span class="slider-value" id="thresholdValue">2.5</span>
-      </div>
-      <div class="slider-scale">
-        <span>1.0 — hair trigger</span>
-        <span>6.0 — very strict</span>
-      </div>
-    </section>
-
-    <section class="card" aria-label="Keywords">
-      <h2 class="card-title">My Keywords</h2>
-      <p class="card-description">Your name, roll number, or any exact phrase your class uses — matched as a strong signal.</p>
+    <section class="card" aria-labelledby="keywordsTitle">
+      <h2 class="card-title" id="keywordsTitle">Your keywords</h2>
+      <p class="card-description">Add your name, your roll number or a phrase your teacher always uses. An exact match counts as a strong signal.</p>
       <div class="chips" id="chipsContainer"></div>
       <div class="add-keyword-row">
-        <label for="keywordInput" class="visually-hidden">Add name or roll number</label>
-        <input type="text" id="keywordInput" placeholder="Add name or roll number…" maxlength="40" />
+        <label for="keywordInput" class="visually-hidden">Add a keyword</label>
+        <input type="text" id="keywordInput" placeholder="Add your name or roll number" maxlength="40" />
         <button type="button" id="addKeywordBtn" class="add-btn" aria-label="Add keyword">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
@@ -76,32 +63,112 @@
       </div>
 
       <div class="suggested-block">
-        <p class="row-label">Suggested — click to add</p>
+        <p class="row-label">Suggestions (click to add)</p>
         <div class="chips suggested-chips" id="suggestedContainer"></div>
       </div>
     </section>
 
-    <section class="card" aria-label="Alarm sound">
-      <h2 class="card-title">Alarm Sound</h2>
-      <p class="card-description">Replace the built-in alarm with your own audio clip.</p>
-      <button type="button" class="upload-placeholder" id="uploadSoundBtn">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 16V4M12 4L7 9M12 4L17 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M4 16V18C4 19.1 4.9 20 6 20H18C19.1 20 20 19.1 20 18V16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>Upload custom sound</span>
-      </button>
+    <section class="card" aria-labelledby="alertsTitle">
+      <h2 class="card-title" id="alertsTitle">Alerts</h2>
+      <p class="card-description">Choose how the tracker gets your attention when a roll call starts.</p>
+
+      <div class="row-between">
+        <div>
+          <p class="row-label" id="alertSoundLabel">Alarm sound</p>
+          <p class="row-detail">Plays three times, even when Chrome is in the background.</p>
+        </div>
+        <button type="button" class="toggle" role="switch" data-setting="alertSound" aria-checked="true" aria-labelledby="alertSoundLabel">
+          <span class="toggle-knob"></span>
+        </button>
+      </div>
+
+      <div class="row-between">
+        <div>
+          <p class="row-label" id="alertNotificationLabel">Desktop notification</p>
+          <p class="row-detail">Stays on screen until you close it.</p>
+        </div>
+        <button type="button" class="toggle" role="switch" data-setting="alertNotification" aria-checked="true" aria-labelledby="alertNotificationLabel">
+          <span class="toggle-knob"></span>
+        </button>
+      </div>
+
+      <div class="row-between">
+        <div>
+          <p class="row-label" id="alertBannerLabel">Banner in Meet</p>
+          <p class="row-detail">A red bar across the top of the Meet tab for 15 seconds.</p>
+        </div>
+        <button type="button" class="toggle" role="switch" data-setting="alertBanner" aria-checked="true" aria-labelledby="alertBannerLabel">
+          <span class="toggle-knob"></span>
+        </button>
+      </div>
+
+      <div class="row-between">
+        <div>
+          <p class="row-label" id="alertTitleFlashLabel">Flashing tab title</p>
+          <p class="row-detail">Keeps flashing until you switch back to the Meet tab.</p>
+        </div>
+        <button type="button" class="toggle" role="switch" data-setting="alertTitleFlash" aria-checked="true" aria-labelledby="alertTitleFlashLabel">
+          <span class="toggle-knob"></span>
+        </button>
+      </div>
+
+      <div class="row-between">
+        <div>
+          <p class="row-label">Alarm tone</p>
+          <p class="row-detail tone-name" id="alarmToneName">Built-in alarm</p>
+          <p class="row-detail">Upload any audio clip up to 30 seconds and 3 MB. It stays on this computer.</p>
+          <p class="row-detail error-text" id="alarmToneError" role="alert" hidden></p>
+        </div>
+        <div class="button-row">
+          <button type="button" id="resetAlarmBtn" class="secondary-btn" hidden>Use built-in</button>
+          <button type="button" id="uploadAlarmBtn" class="secondary-btn">Upload sound</button>
+          <input type="file" id="alarmFileInput" accept="audio/*" hidden />
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="row-label" for="volumeSlider">Alarm volume</label>
+        <div class="slider-row">
+          <input type="range" id="volumeSlider" min="0" max="100" step="5" value="100" />
+          <span class="slider-value" id="volumeValue">100%</span>
+        </div>
+      </div>
+
+      <div class="row-between">
+        <div>
+          <label class="row-label" for="cooldownSelect">Quiet time after an alert</label>
+          <p class="row-detail">New detections still show up in the log. They just won't set off another alert until this runs out.</p>
+        </div>
+        <select id="cooldownSelect" class="select">
+          <option value="15">15 seconds</option>
+          <option value="30">30 seconds</option>
+          <option value="60">1 minute</option>
+          <option value="120">2 minutes</option>
+        </select>
+      </div>
+
+      <button type="button" id="testAlertBtn" class="primary-btn">Test sound and notification</button>
+    </section>
+
+    <section class="card" aria-labelledby="thresholdTitle">
+      <h2 class="card-title" id="thresholdTitle">Alert threshold</h2>
+      <p class="card-description">
+        The tracker adds up everything it noticed in chat and captions over the last 5 seconds,
+        and the alert goes off once that total reaches this number. If it misses roll calls,
+        lower it. If it goes off for no reason, raise it. The default is 2.5.
+      </p>
+      <div class="slider-row">
+        <input type="range" id="thresholdSlider" min="1" max="6" step="0.1" value="2.5" aria-labelledby="thresholdTitle" />
+        <span class="slider-value" id="thresholdValue">2.5</span>
+      </div>
+      <div class="slider-scale">
+        <span>1.0: goes off easily</span>
+        <span>6.0: very strict</span>
+      </div>
     </section>
   </div>
 
-  <div class="modal-overlay" id="comingSoonModal" hidden>
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="comingSoonTitle">
-      <h3 id="comingSoonTitle">Coming soon</h3>
-      <p>Custom alarm sounds aren't available yet — for now, Meet Attendance Tracker uses its built-in alarm. This is on the roadmap.</p>
-      <button type="button" class="modal-close" id="closeModalBtn">Got it</button>
-    </div>
-  </div>
-
+  <script src="keywords.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

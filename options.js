@@ -1,201 +1,206 @@
-// options.js — full settings page. Reads/writes the same chrome.storage.local
-// keys as popup.js, so both stay in sync automatically via storage.onChanged.
+// options.js — settings page. Reads/writes the same chrome.storage.local keys
+// as popup.js, content.js and background.js. Every write comes back through
+// storage.onChanged, which re-renders, so the page stays in sync with other
+// open pages without extra bookkeeping. Keyword helpers come from keywords.js.
 
+// Keep in sync with the defaults in content.js (state.settings) and
+// background.js (ALERT_DEFAULTS). The custom alarm audio itself lives under
+// "customAlarm" and is deliberately not loaded here; only its name is.
 const DEFAULTS = {
   enabled: true,
   customKeywords: [],
   sensitivity: "normal",
   alertThreshold: 2.5,
+  alertSound: true,
+  alertNotification: true,
+  alertBanner: true,
+  alertTitleFlash: true,
+  alarmVolume: 1,
+  cooldownSeconds: 30,
+  customAlarmName: "",
 };
 
 const SUGGESTED_KEYWORDS = ["Yes", "Y", "Available", "Here", "Ready"];
 
+// Stored as a base64 data URL (~4 MB for a 3 MB file), well inside
+// chrome.storage.local's 10 MB quota.
+const MAX_ALARM_BYTES = 3 * 1024 * 1024;
+const MAX_ALARM_SECONDS = 30;
+
 const el = {
-  masterToggle: document.getElementById("masterToggle"),
+  toggles: Array.from(document.querySelectorAll(".toggle[data-setting]")),
   segmentedPills: Array.from(document.querySelectorAll(".segmented-pill")),
   thresholdSlider: document.getElementById("thresholdSlider"),
   thresholdValue: document.getElementById("thresholdValue"),
+  volumeSlider: document.getElementById("volumeSlider"),
+  volumeValue: document.getElementById("volumeValue"),
+  cooldownSelect: document.getElementById("cooldownSelect"),
+  testAlertBtn: document.getElementById("testAlertBtn"),
+  alarmToneName: document.getElementById("alarmToneName"),
+  alarmToneError: document.getElementById("alarmToneError"),
+  uploadAlarmBtn: document.getElementById("uploadAlarmBtn"),
+  resetAlarmBtn: document.getElementById("resetAlarmBtn"),
+  alarmFileInput: document.getElementById("alarmFileInput"),
   chipsContainer: document.getElementById("chipsContainer"),
   suggestedContainer: document.getElementById("suggestedContainer"),
   keywordInput: document.getElementById("keywordInput"),
   addKeywordBtn: document.getElementById("addKeywordBtn"),
-  uploadSoundBtn: document.getElementById("uploadSoundBtn"),
-  comingSoonModal: document.getElementById("comingSoonModal"),
-  closeModalBtn: document.getElementById("closeModalBtn"),
 };
 
 let settings = { ...DEFAULTS };
 
-function load() {
-  chrome.storage.local.get(DEFAULTS, (result) => {
-    settings = { ...DEFAULTS, ...result };
-    renderToggle();
-    renderSensitivity();
-    renderThreshold();
-    renderChips();
-    renderSuggested();
-  });
+function save(key, value) {
+  settings[key] = value;
+  chrome.storage.local.set({ [key]: value });
 }
 
-// --- Master toggle ---------------------------------------------------
-
-function renderToggle() {
-  el.masterToggle.setAttribute("aria-checked", String(settings.enabled));
-}
-
-el.masterToggle.addEventListener("click", () => {
-  settings.enabled = !settings.enabled;
-  chrome.storage.local.set({ enabled: settings.enabled });
-  renderToggle();
-});
-
-// --- Sensitivity -------------------------------------------------------
-
-function renderSensitivity() {
+function render() {
+  for (const toggle of el.toggles) {
+    toggle.setAttribute("aria-checked", String(settings[toggle.dataset.setting]));
+  }
   for (const pill of el.segmentedPills) {
     pill.setAttribute("aria-checked", String(pill.dataset.value === settings.sensitivity));
   }
+  el.thresholdSlider.value = settings.alertThreshold;
+  el.thresholdValue.textContent = Number(settings.alertThreshold).toFixed(1);
+  el.volumeSlider.value = Math.round(settings.alarmVolume * 100);
+  el.volumeValue.textContent = el.volumeSlider.value + "%";
+  el.volumeSlider.disabled = !settings.alertSound;
+  el.cooldownSelect.value = String(settings.cooldownSeconds);
+  el.alarmToneName.textContent = settings.customAlarmName || "Built-in alarm";
+  el.alarmToneName.title = settings.customAlarmName;
+  el.resetAlarmBtn.hidden = !settings.customAlarmName;
+  renderKeywordChips(el.chipsContainer, settings.customKeywords, removeKeyword);
+  renderSuggested();
+}
+
+// --- Switches, sensitivity, sliders, select ---------------------------------
+
+for (const toggle of el.toggles) {
+  toggle.addEventListener("click", () => save(toggle.dataset.setting, !settings[toggle.dataset.setting]));
 }
 
 for (const pill of el.segmentedPills) {
-  pill.addEventListener("click", () => {
-    settings.sensitivity = pill.dataset.value;
-    chrome.storage.local.set({ sensitivity: settings.sensitivity });
-    renderSensitivity();
-  });
-}
-
-// --- Alert threshold -------------------------------------------------------
-
-function renderThreshold() {
-  el.thresholdSlider.value = settings.alertThreshold;
-  el.thresholdValue.textContent = Number(settings.alertThreshold).toFixed(1);
+  pill.addEventListener("click", () => save("sensitivity", pill.dataset.value));
 }
 
 el.thresholdSlider.addEventListener("input", () => {
   el.thresholdValue.textContent = Number(el.thresholdSlider.value).toFixed(1);
 });
+el.thresholdSlider.addEventListener("change", () => save("alertThreshold", Number(el.thresholdSlider.value)));
 
-el.thresholdSlider.addEventListener("change", () => {
-  settings.alertThreshold = Number(el.thresholdSlider.value);
-  chrome.storage.local.set({ alertThreshold: settings.alertThreshold });
+el.volumeSlider.addEventListener("input", () => {
+  el.volumeValue.textContent = el.volumeSlider.value + "%";
+});
+el.volumeSlider.addEventListener("change", () => save("alarmVolume", Number(el.volumeSlider.value) / 100));
+
+el.cooldownSelect.addEventListener("change", () => save("cooldownSeconds", Number(el.cooldownSelect.value)));
+
+el.testAlertBtn.addEventListener("click", () => {
+  chrome.runtime.sendMessage({ type: "TEST_ALERT" });
 });
 
-// --- Keyword chips -------------------------------------------------------
+// --- Custom alarm tone -------------------------------------------------------
 
-function renderChips() {
-  el.chipsContainer.innerHTML = "";
-  for (const kw of settings.customKeywords) {
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    const label = document.createElement("span");
-    label.textContent = kw;
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "chip-remove";
-    removeBtn.setAttribute("aria-label", "Remove " + kw);
-    removeBtn.textContent = "✕";
-    removeBtn.addEventListener("click", () => removeKeyword(kw));
-    chip.appendChild(label);
-    chip.appendChild(removeBtn);
-    el.chipsContainer.appendChild(chip);
+function showAlarmError(message) {
+  el.alarmToneError.textContent = message;
+  el.alarmToneError.hidden = !message;
+}
+
+// The file comes from the user's disk, so check it before storing: it has to
+// be audio Chrome can actually play, and short enough to work as an alarm
+// (it plays three times in a row).
+async function readAlarmFile(file) {
+  if (!file.type.startsWith("audio/")) throw new Error("That isn't an audio file.");
+  if (file.size > MAX_ALARM_BYTES) throw new Error("That file is over 3 MB. Try a shorter clip.");
+
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Couldn't read that file."));
+    reader.readAsDataURL(file);
+  });
+
+  const duration = await new Promise((resolve, reject) => {
+    const audio = new Audio(dataUrl);
+    audio.onloadedmetadata = () => resolve(audio.duration);
+    audio.onerror = () => reject(new Error("Chrome can't play that file. Try an MP3 or WAV."));
+  });
+  if (!(duration <= MAX_ALARM_SECONDS)) throw new Error("That clip is longer than 30 seconds. Pick a shorter one.");
+
+  return dataUrl;
+}
+
+el.uploadAlarmBtn.addEventListener("click", () => el.alarmFileInput.click());
+
+el.alarmFileInput.addEventListener("change", async () => {
+  const file = el.alarmFileInput.files[0];
+  el.alarmFileInput.value = ""; // so picking the same file again still fires "change"
+  if (!file) return;
+  try {
+    const dataUrl = await readAlarmFile(file);
+    await chrome.storage.local.set({ customAlarm: dataUrl, customAlarmName: file.name });
+    showAlarmError("");
+  } catch (e) {
+    showAlarmError(e.message);
   }
-}
+});
 
-function hasKeyword(kw) {
-  return settings.customKeywords.some((k) => k.toLowerCase() === kw.toLowerCase());
-}
+el.resetAlarmBtn.addEventListener("click", () => {
+  showAlarmError("");
+  chrome.storage.local.remove(["customAlarm", "customAlarmName"]);
+});
 
-function addKeywordValue(value) {
-  const trimmed = value.trim();
-  if (!trimmed || hasKeyword(trimmed)) return;
-  settings.customKeywords = [...settings.customKeywords, trimmed];
-  chrome.storage.local.set({ customKeywords: settings.customKeywords });
-  renderChips();
-  renderSuggested();
+// --- Keywords -------------------------------------------------------
+
+function addKeyword(value) {
+  const next = addKeywordTo(settings.customKeywords, value);
+  if (next) save("customKeywords", next);
 }
 
 function removeKeyword(kw) {
-  settings.customKeywords = settings.customKeywords.filter((k) => k !== kw);
-  chrome.storage.local.set({ customKeywords: settings.customKeywords });
-  renderChips();
-  renderSuggested();
+  save("customKeywords", settings.customKeywords.filter((k) => k !== kw));
 }
 
-el.addKeywordBtn.addEventListener("click", () => {
-  addKeywordValue(el.keywordInput.value);
+function addFromInput() {
+  addKeyword(el.keywordInput.value);
   el.keywordInput.value = "";
-});
+}
+
+el.addKeywordBtn.addEventListener("click", addFromInput);
 el.keywordInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
-    addKeywordValue(el.keywordInput.value);
-    el.keywordInput.value = "";
+    addFromInput();
   }
 });
-
-// --- Suggested keywords -------------------------------------------------------
 
 function renderSuggested() {
   el.suggestedContainer.innerHTML = "";
   for (const kw of SUGGESTED_KEYWORDS) {
-    const added = hasKeyword(kw);
+    const added = hasKeywordIn(settings.customKeywords, kw);
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "chip";
-    chip.dataset.added = String(added);
     chip.disabled = added;
     chip.setAttribute("aria-label", added ? kw + " already added" : "Add " + kw);
-    chip.innerHTML =
-      '<span class="chip-add-icon">' + (added ? "✓" : "+") + "</span><span>" + kw + "</span>";
-    chip.addEventListener("click", () => addKeywordValue(kw));
+    chip.innerHTML = '<span class="chip-add-icon">' + (added ? "✓" : "+") + "</span><span>" + kw + "</span>";
+    chip.addEventListener("click", () => addKeyword(kw));
     el.suggestedContainer.appendChild(chip);
   }
 }
 
-// --- Alarm sound placeholder -------------------------------------------------------
-
-el.uploadSoundBtn.addEventListener("click", () => {
-  el.comingSoonModal.hidden = false;
-  el.closeModalBtn.focus();
-});
-
-el.closeModalBtn.addEventListener("click", () => {
-  el.comingSoonModal.hidden = true;
-  el.uploadSoundBtn.focus();
-});
-
-el.comingSoonModal.addEventListener("click", (e) => {
-  if (e.target === el.comingSoonModal) el.comingSoonModal.hidden = true;
-});
-
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !el.comingSoonModal.hidden) {
-    el.comingSoonModal.hidden = true;
-  }
-});
-
-// --- Live sync if popup changes something while this page is open ---------
+// --- Load + live sync -------------------------------------------------------
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
-  if (changes.enabled) {
-    settings.enabled = changes.enabled.newValue;
-    renderToggle();
-  }
-  if (changes.sensitivity) {
-    settings.sensitivity = changes.sensitivity.newValue;
-    renderSensitivity();
-  }
-  if (changes.alertThreshold) {
-    settings.alertThreshold = changes.alertThreshold.newValue;
-    renderThreshold();
-  }
-  if (changes.customKeywords) {
-    settings.customKeywords = changes.customKeywords.newValue || [];
-    renderChips();
-    renderSuggested();
-  }
+  const keys = Object.keys(changes).filter((k) => k in DEFAULTS);
+  if (!keys.length) return;
+  for (const k of keys) settings[k] = changes[k].newValue ?? DEFAULTS[k];
+  render();
 });
 
-load();
+chrome.storage.local.get(DEFAULTS, (result) => {
+  settings = result;
+  render();
+});

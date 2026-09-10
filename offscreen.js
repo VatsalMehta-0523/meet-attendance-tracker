@@ -4,10 +4,10 @@
 let audio = null;
 let playsRemaining = 0;
 
-function playAlarm() {
+function playAlarm(volume, src) {
   stopAlarm();
-  audio = new Audio(chrome.runtime.getURL("alarm.wav"));
-  audio.volume = 1.0;
+  audio = new Audio(src || chrome.runtime.getURL("alarm.wav"));
+  audio.volume = volume ?? 1;
   playsRemaining = 3;
 
   audio.addEventListener("ended", () => {
@@ -32,7 +32,7 @@ function stopAlarm() {
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "PLAY_ALARM") {
-    playAlarm();
+    playAlarm(message.volume, message.src);
   } else if (message.type === "STOP_ALARM") {
     stopAlarm();
   }

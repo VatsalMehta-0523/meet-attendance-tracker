@@ -125,15 +125,18 @@
     overlayElement: null,
     overlayTimeout: null,
 
+    // Keep in sync with DEFAULTS in options.js.
     settings: {
       enabled: true,
       customKeywords: [],
       sensitivity: "normal",
       alertThreshold: 2.5,
+      alertBanner: true,
+      alertTitleFlash: true,
+      cooldownSeconds: 30,
     },
   };
 
-  const ALERT_COOLDOWN_MS = 30000;
   const DETECTION_LOG_CAP = 100;
 
   // How recent evidence has to be to still count toward the combined score,
@@ -150,24 +153,20 @@
   // ---------------------------------------------------------------------
 
   function loadSettings(cb) {
-    chrome.storage.local.get(
-      { enabled: true, customKeywords: [], sensitivity: "normal", alertThreshold: 2.5 },
-      (result) => {
-        state.settings.enabled = result.enabled;
-        state.settings.customKeywords = result.customKeywords;
-        state.settings.sensitivity = result.sensitivity;
-        state.settings.alertThreshold = result.alertThreshold;
-        if (cb) cb();
-      }
-    );
+    // state.settings doubles as the defaults for keys that were never saved.
+    chrome.storage.local.get(state.settings, (result) => {
+      Object.assign(state.settings, result);
+      if (cb) cb();
+    });
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (changes.enabled) state.settings.enabled = changes.enabled.newValue;
-    if (changes.customKeywords) state.settings.customKeywords = changes.customKeywords.newValue;
-    if (changes.sensitivity) state.settings.sensitivity = changes.sensitivity.newValue;
-    if (changes.alertThreshold) state.settings.alertThreshold = changes.alertThreshold.newValue;
+    for (const key in changes) {
+      if (key in state.settings && changes[key].newValue !== undefined) {
+        state.settings[key] = changes[key].newValue;
+      }
+    }
   });
 
   // ---------------------------------------------------------------------
@@ -574,7 +573,7 @@
     state.aggregateScore = state.recentEvents.reduce((sum, e) => sum + e.score, 0);
 
     const crossedThreshold = state.aggregateScore >= state.settings.alertThreshold;
-    const cooldownActive = now - state.lastAlertTime < ALERT_COOLDOWN_MS;
+    const cooldownActive = now - state.lastAlertTime < state.settings.cooldownSeconds * 1000;
     const suppressed = !crossedThreshold || cooldownActive;
 
     logDetection(text, score, source, suppressed, labels);
@@ -610,8 +609,14 @@
     } catch (e) {
       // service worker may be waking up; ignore
     }
-    showOverlay(text);
-    startTitleFlash();
+    showVisualAlerts(text);
+  }
+
+  // The service worker handles sound + notification; these two live in the
+  // Meet tab. Each one can be switched off on the settings page.
+  function showVisualAlerts(text) {
+    if (state.settings.alertBanner) showOverlay(text);
+    if (state.settings.alertTitleFlash) startTitleFlash();
   }
 
   // ---------------------------------------------------------------------
@@ -626,7 +631,7 @@
     overlay.innerHTML =
       '<div class="meet-attendance-overlay-inner">' +
       '<span class="meet-attendance-overlay-title">ATTENDANCE CHECK DETECTED</span>' +
-      '<span class="meet-attendance-overlay-sub">Respond now — detected in ' +
+      '<span class="meet-attendance-overlay-sub">Respond now: ' +
       (text ? escapeHtml(truncate(text, 80)) : "") +
       '</span>' +
       '</div>' +
@@ -802,8 +807,7 @@
     }
 
     if (message.type === "TEST_VISUAL_ALERT") {
-      showOverlay("Test Alert");
-      startTitleFlash();
+      showVisualAlerts("Test alert");
       sendResponse({ ok: true });
       return;
     }
