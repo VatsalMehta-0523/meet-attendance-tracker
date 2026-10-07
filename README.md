@@ -1,5 +1,7 @@
 # Meet Attendance Tracker
 
+**[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/meet-attendance-tracker/hgjmfjempcmmbiipppmmkmoifehbpacb)**
+
 A Manifest V3 Chrome extension that watches Google Meet chat and live captions
 for attendance roll-calls ("mark your attendance", "roll number", "say
 present", etc.) and fires a loud, hard-to-miss alert (sound + desktop
@@ -24,7 +26,7 @@ it to actually run the extension.
 2. Turn on **Developer mode** — toggle in the top-right corner
 3. Click **Load unpacked** (top-left)
 4. In the file picker, select this whole folder:
-   `E:\vatsal\Gmeet-attendance-tracker-extension`
+   the folder you cloned or downloaded this repository into
    (select the folder itself, not an individual file)
 5. "Meet Attendance Tracker" now appears as a card on the extensions page —
    that means it's running. There's no separate "start" command; it stays
@@ -167,7 +169,7 @@ out of your global Python and out of git via `.gitignore`).
 **One-time setup:**
 
 ```bash
-cd E:\vatsal\Gmeet-attendance-tracker-extension
+cd meet-attendance-tracker
 python -m venv tools/.venv
 tools\.venv\Scripts\pip install -r tools\requirements.txt
 ```
